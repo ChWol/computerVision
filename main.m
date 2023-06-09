@@ -45,51 +45,39 @@ function start3DReconstruction(~, ~)
     set(h, 'String', 'Starting 3D Reconstruction...');
     % Hier würden Sie den Code zur Durchführung der 3D-Rekonstruktion hinzufügen.
     % Angenommen, 'create3DModel' ist Ihre Funktion zur 3D-Rekonstruktion und gibt Koordinaten X, Y und Z zurück.
-    % [X, Y, Z] = create3DModel(images, K); % 'K' ist die Kamera-Kalibrierungsmatrix
+    [X, Y, Z] = create3DModel(images, K); % 'K' ist die Kamera-Kalibrierungsmatrix
     
     % Da der eigentliche Code für die 3D-Rekonstruktion fehlt, erstellen wir eine 3D-Kugel als Platzhalter.
-    %display3DModel(model);
-    [X, Y, Z] = sphere;
-    surf(X, Y, Z);
+    display3DModel([X, Y, Z]);
     set(h, 'String', '3D Reconstruction Completed');
 end
 
 
-function model = create3DModel(image, K)
-
-    % Initialisierung der 3D-Punktwolke
-    pointCloud = [];
-
-    % Merkmalsextraktion aus dem Bild (Beispiel: SURF-Features)
-    points = detectSURFFeatures(image);
-
-    % Anpassung der Merkmale zwischen den Bildern
-    % Da dies in dieser Aufgabe auf ein einzelnes Bild beschränkt ist, kann dieser Schritt nicht umgesetzt werden
-
-    % Schätzen der Kameraposition und -orientierung
-    % Dieser Schritt kann nur durchgeführt werden, wenn Sie mehrere Bilder mit ihren entsprechenden K-Matrizen haben
-
-    % Triangulieren Sie 3D-Punkte (zum Beispiel mit der Funktion triangulate)
-    % In diesem Szenario können wir keine Triangulation durchführen, da wir nur ein Bild und eine K-Matrix haben
-
-    % Erzeugen Sie das Modell aus der Punktwolke
-    model = pointCloud;
-
+function model = create3DModel(images, K)
+    % Es wird angenommen, dass images ein Zellarray ist, in dem jedes Element ein Bild ist
+    % Finden Sie Punkt-Korrespondenzen zwischen den Bildern
+    Ftp1 = harris_detector(images{1});
+    Ftp2 = harris_detector(images{2});
+    correspondences = point_correspondence(images{1}, images{2}, Ftp1, Ftp2);
+    
+    % Anwenden des Eight-Point-Algorithmus
+    EF = epa(correspondences, K);
+    
+    % Wiederherstellung der Kamera-Extrinsik und 3D-Punktwolke
+    [T1, T2, R1, R2, U, V] = TR_from_E(EF);
+    [T_cell, R_cell, d_cell, x1, x2] = reconstruction(T1, T2, R1, R2, correspondences, K);
+    
+    % 3D-Model erstellen
+    model = cell2mat(d_cell);
 end
 
-function plot = display3DModel(model)
-% Nehmen wir an, dass "pointCloud" Ihre 3D-Punktwolke ist und aus einem nx3-Matrix besteht
-% wobei n die Anzahl der Punkte ist und jede Zeile die (x, y, z)-Koordinaten eines Punktes darstellt.
 
-x = pointCloud(:,1); % x-Koordinaten
-y = pointCloud(:,2); % y-Koordinaten
-z = pointCloud(:,3); % z-Koordinaten
-
-% Erzeugen Sie das Scatter-Plot
-scatter3(x, y, z, 'filled')
-title('3D Rekonstruktion');
-xlabel('X');
-ylabel('Y');
-zlabel('Z');
-
+function display3DModel(model)
+    % Es wird angenommen, dass das Modell eine nx3-Matrix ist, wobei n die Anzahl der 3D-Punkte ist
+    figure;
+    scatter3(model(:,1), model(:,2), model(:,3), '.');
+    title('3D Model');
+    xlabel('X');
+    ylabel('Y');
+    zlabel('Z');
 end
