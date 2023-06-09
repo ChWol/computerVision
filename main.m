@@ -3,81 +3,66 @@ global images h;
 
 % GUI Initialisierung
 f = figure('Name', '3D Model Reconstruction', 'Color', 'white');
-set(f, 'menubar', 'none');  % Menüleiste ausblenden
-set(f, 'NumberTitle', 'off');  % Fenstertitel ausblenden
-set(f, 'Position', [200, 200, 600, 400]);  % Fensterposition und Größe festlegen
-set(gca, 'Position', [0.2 0.2 0.6 0.6]);  % Achsenposition und Größe festlegen
-set(gca, 'FontName', 'Arial', 'FontSize', 14);
+set(f, 'menubar', 'none');
+set(f, 'NumberTitle', 'off');
+set(f, 'Position', [100, 100, 800, 600]);  % Fensterposition und Größe festlegen
+
+% Titel-Header
+uicontrol('Style', 'text', 'String', '3D Model Reconstruction', ...
+    'Position', [100, 550, 600, 50], 'BackgroundColor', 'blue', ...
+    'ForegroundColor', 'white', 'FontSize', 20, 'HorizontalAlignment', 'center');
+
+% Beschreibung
+uicontrol('Style', 'text', 'String', 'This tool allows you to reconstruct 3D models from 2D images.', ...
+    'Position', [100, 500, 600, 30], 'FontSize', 14, 'HorizontalAlignment', 'center');
 
 % Button zum Laden von Bildern
 uicontrol('Style', 'pushbutton', 'String', 'Load Images', ...
-    'Position', [20, 350, 100, 30], 'Callback', @loadImages);
+    'Position', [100, 450, 200, 30], 'Callback', @loadImages);
 
 % Button zum Starten der 3D-Rekonstruktion
 uicontrol('Style', 'pushbutton', 'String', 'Start 3D Reconstruction', ...
-    'Position', [20, 300, 160, 30], 'Callback', @start3DReconstruction);
+    'Position', [500, 450, 200, 30], 'Callback', @start3DReconstruction);
 
 % Fortschrittsbalken
 h = uicontrol('Style', 'text', 'String', '', ...
-    'Position', [20, 260, 160, 30]);
+    'Position', [100, 400, 600, 30], 'HorizontalAlignment', 'center');
 
-% Bildlade-Funktion
-function loadImages(~, ~)
-    global h;
-    [file, path] = uigetfile('*.jpg', 'MultiSelect', 'on');
-    if isequal(file,0) || isequal(path,0)
-        disp('Benutzer hat Auswahl abgebrochen')
+% Button zum Exportieren des 3D-Modells
+uicontrol('Style', 'pushbutton', 'String', 'Export 3D Model', ...
+    'Position', [100, 350, 200, 30], 'Callback', @export3DModel);
+
+% Button zum Anzeigen des Code-Repositories
+uicontrol('Style', 'pushbutton', 'String', 'See Code', ...
+    'Position', [500, 350, 200, 30], 'Callback', @openCodeRepository);
+
+% 3D Modell Platzhalter
+ax = axes('Position', [0.2, 0.05, 0.6, 0.3]);
+axis(ax, 'off'); % Achsen ausschalten
+
+
+% Utils Funktionen
+% Export-Funktion
+function export3DModel(~, ~)
+    global model;  % Angenommen, das Modell ist eine globale Variable
+    
+    % Erstelle ein PointCloud-Objekt aus dem Modell
+    ptCloud = pointCloud(model(:, 1:3), 'Color', model(:, 4:6));
+    
+    % Fragt den Benutzer nach einem Dateinamen und Speicherort
+    [file, path] = uiputfile('*.ply', 'Save 3D Model As');
+    if isequal(file, 0) || isequal(path, 0)
+        disp('User cancelled export')
         return
     end
-    if iscell(file)
-        for k = 1:length(file)
-            images{k} = imread(fullfile(path, file{k}));
-        end
-    else
-        images{1} = imread(fullfile(path, file));
-    end
-    set(h, 'String', 'Images Loaded');
+    outputFile = fullfile(path, file);
+    
+    % Speichert die Punktwolke im .ply-Format
+    pcwrite(ptCloud, outputFile, 'Encoding', 'ascii');
+    disp(['3D model saved as ', outputFile]);
 end
 
-% 3D-Rekonstruktionsfunktion
-function start3DReconstruction(~, ~)
-    global h;
-    set(h, 'String', 'Starting 3D Reconstruction...');
-    % Hier würden Sie den Code zur Durchführung der 3D-Rekonstruktion hinzufügen.
-    % Angenommen, 'create3DModel' ist Ihre Funktion zur 3D-Rekonstruktion und gibt Koordinaten X, Y und Z zurück.
-    [X, Y, Z] = create3DModel(images, K); % 'K' ist die Kamera-Kalibrierungsmatrix
-    
-    % Da der eigentliche Code für die 3D-Rekonstruktion fehlt, erstellen wir eine 3D-Kugel als Platzhalter.
-    display3DModel([X, Y, Z]);
-    set(h, 'String', '3D Reconstruction Completed');
-end
-
-
-function model = create3DModel(images, K)
-    % Es wird angenommen, dass images ein Zellarray ist, in dem jedes Element ein Bild ist
-    % Finden Sie Punkt-Korrespondenzen zwischen den Bildern
-    Ftp1 = harris_detector(images{1});
-    Ftp2 = harris_detector(images{2});
-    correspondences = point_correspondence(images{1}, images{2}, Ftp1, Ftp2);
-    
-    % Anwenden des Eight-Point-Algorithmus
-    EF = epa(correspondences, K);
-    
-    % Wiederherstellung der Kamera-Extrinsik und 3D-Punktwolke
-    [T1, T2, R1, R2, U, V] = TR_from_E(EF);
-    [T_cell, R_cell, d_cell, x1, x2] = reconstruction(T1, T2, R1, R2, correspondences, K);
-    
-    % 3D-Model erstellen
-    model = cell2mat(d_cell);
-end
-
-
-function display3DModel(model)
-    % Es wird angenommen, dass das Modell eine nx3-Matrix ist, wobei n die Anzahl der 3D-Punkte ist
-    figure;
-    scatter3(model(:,1), model(:,2), model(:,3), '.');
-    title('3D Model');
-    xlabel('X');
-    ylabel('Y');
-    zlabel('Z');
+% Öffnet das Code-Repository im Webbrowser
+function openCodeRepository(~, ~)
+    web('https://github.com/ChWol/computerVision', '-browser');  % Ersetzen Sie dies durch die tatsächliche URL Ihres Code-Repositories
 end
